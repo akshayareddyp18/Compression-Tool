@@ -7,6 +7,7 @@ function App() {
   const [downloadUrl, setDownloadUrl] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [decompressing, setDecompressing] = useState(false);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:5000";
 
@@ -45,11 +46,39 @@ function App() {
     }
   };
 
-  const resetForm = () => {
-    setFile(null);
-    setMessage("");
-    setDownloadUrl("");
-    setUploadProgress(0);
+  const handleDecompress = async () => {
+    if (!downloadUrl) return alert("No compressed file found to decompress!");
+
+    try {
+      setDecompressing(true);
+      const compressedFileName = downloadUrl.split("/").pop();
+      const response = await axios.get(downloadUrl, { responseType: "blob" });
+
+      const formData = new FormData();
+      formData.append("file", new File([response.data], compressedFileName));
+
+      const decompressResponse = await axios.post(`${backendUrl}/decompress`, formData, {
+        responseType: "blob",
+      });
+
+      const decompressedBlob = new Blob([decompressResponse.data]);
+      const decompressedUrl = window.URL.createObjectURL(decompressedBlob);
+      const link = document.createElement("a");
+      link.href = decompressedUrl;
+      link.setAttribute("download", compressedFileName.replace("_compressed.zip", "_decompressed.bin"));
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+
+      setMessage("✅ File successfully decompressed!");
+      alert("✅ Decompression successful!");
+    } catch (error) {
+      console.error(error);
+      setMessage("❌ Error decompressing the file.");
+      alert("❌ Decompression error. Please try again.");
+    } finally {
+      setDecompressing(false);
+    }
   };
 
   return (
@@ -75,7 +104,7 @@ function App() {
           color: "white",
           border: "none",
           borderRadius: "8px",
-          cursor: "pointer"
+          cursor: "pointer",
         }}
       >
         {loading ? "Compressing..." : "Upload & Compress"}
@@ -97,20 +126,38 @@ function App() {
       <p style={{ color: message.includes("Error") ? "red" : "green" }}>{message}</p>
 
       {downloadUrl && (
-        <a href={downloadUrl} download onClick={resetForm}>
+        <>
+          <a href={downloadUrl} download>
+            <button
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "green",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                marginRight: "10px",
+              }}
+            >
+              Download Compressed File
+            </button>
+          </a>
+
           <button
+            onClick={handleDecompress}
+            disabled={decompressing}
             style={{
               padding: "10px 20px",
-              backgroundColor: "green",
+              backgroundColor: "orange",
               color: "white",
               border: "none",
               borderRadius: "8px",
-              cursor: "pointer"
+              cursor: "pointer",
             }}
           >
-            Download Compressed File
+            {decompressing ? "Decompressing..." : "Decompress File"}
           </button>
-        </a>
+        </>
       )}
     </div>
   );

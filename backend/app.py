@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 import os
 import numpy as np
@@ -6,14 +6,18 @@ import zipfile
 from collections import Counter, namedtuple
 from heapq import heappush, heappop
 from werkzeug.utils import secure_filename
+import json
+import io
 
 app = Flask(__name__)
 CORS(app)
 
 UPLOAD_FOLDER = "uploads"
 COMPRESSED_FOLDER = "compressed"
+DECOMPRESSED_FOLDER = "decompressed"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(COMPRESSED_FOLDER, exist_ok=True)
+os.makedirs(DECOMPRESSED_FOLDER, exist_ok=True)
 
 # Huffman Tree node
 Node = namedtuple("Node", ["freq", "symbol", "left", "right"])
@@ -56,9 +60,30 @@ def vae_compress(content_bytes):
     downsampled = arr[::2]
     return downsampled.tobytes()
 
+def vae_decompress(content_bytes):
+    decompressed = bytearray()
+    for b in content_bytes:
+        decompressed.extend([b, 0])
+    return decompressed
+
+def huffman_decompress(compressed_bytes, codebook):
+    inverse_codebook = {v: int(k) for k, v in codebook.items()}
+
+    bitstream = bin(int.from_bytes(compressed_bytes, byteorder='big'))[2:]
+    bitstream = bitstream.zfill(len(compressed_bytes) * 8)
+
+    decoded_bytes = bytearray()
+    current_code = ""
+    for bit in bitstream:
+        current_code += bit
+        if current_code in inverse_codebook:
+            decoded_bytes.append(inverse_codebook[current_code])
+            current_code = ""
+    return bytes(decoded_bytes)
+
 @app.route("/", methods=["GET"])
 def home():
-    return "✅ Huffman & VAE Compression Backend is running!"
+    return "Sucessfully running!"
 
 @app.route("/status", methods=["GET"])
 def status():
@@ -87,18 +112,12 @@ def upload_file():
         output_zip = os.path.join(COMPRESSED_FOLDER, f"{filename}_compressed.zip")
         with zipfile.ZipFile(output_zip, 'w') as zipf:
             zipf.writestr(f"{filename}_compressed.bin", vae_compressed_data)
+            zipf.writestr(f"{filename}_codebook.json", json.dumps({str(k): v for k, v in codebook.items()}))
 
         original_size = os.path.getsize(file_path)
         compressed_size = os.path.getsize(output_zip)
         compression_ratio = round(original_size / compressed_size, 2) if compressed_size > 0 else 0
         space_saving = round((1 - compressed_size / original_size) * 100, 2) if original_size > 0 else 0
-
-        # Print compression stats in console
-        print(f"✅ Compression completed for {filename}")
-        print(f"Original file size: {original_size} bytes")
-        print(f"Compressed file size: {compressed_size} bytes")
-        print(f"Compression Ratio: {compression_ratio}")
-        print(f"Space Saved: {space_saving}%")
 
         download_url = f"http://127.0.0.1:5000/download/{filename}_compressed.zip"
 
@@ -117,6 +136,45 @@ def upload_file():
 @app.route("/download/<path:filename>")
 def download_file(filename):
     return send_from_directory(os.path.abspath(COMPRESSED_FOLDER), filename, as_attachment=True)
+
+@app.route("/decompress", methods=["POST"])
+def decompress_file():
+    if "file" not in request.files:
+        return jsonify({"message": "No file part"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"message": "No selected file"}), 400
+
+    filename = secure_filename(file.filename)
+    zip_path = os.path.join(COMPRESSED_FOLDER, filename)
+    file.save(zip_path)
+
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(DECOMPRESSED_FOLDER)
+            extracted_files = zip_ref.namelist()
+
+        bin_file = next(f for f in extracted_files if f.endswith('.bin'))
+        codebook_file = next(f for f in extracted_files if f.endswith('.json'))
+
+        with open(os.path.join(DECOMPRESSED_FOLDER, bin_file), 'rb') as f:
+            vae_compressed_data = f.read()
+
+        with open(os.path.join(DECOMPRESSED_FOLDER, codebook_file), 'r') as f:
+            codebook = json.load(f)
+
+        huffman_bytes = vae_decompress(vae_compressed_data)
+        original_data = huffman_decompress(huffman_bytes, codebook)
+
+        return send_file(
+            io.BytesIO(original_data),
+            download_name=filename.replace("_compressed.zip", "_decompressed_original_file.bin"),
+            as_attachment=True
+        )
+
+    except Exception as e:
+        return jsonify({"message": f"❌ Error during decompression: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
