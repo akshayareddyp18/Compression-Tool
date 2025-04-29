@@ -83,7 +83,7 @@ def huffman_decompress(compressed_bytes, codebook):
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Sucessfully running!"
+    return "Successfully running!"
 
 @app.route("/status", methods=["GET"])
 def status():
@@ -99,6 +99,7 @@ def upload_file():
         return jsonify({"message": "No selected file"}), 400
 
     filename = secure_filename(file.filename)
+    file_extension = os.path.splitext(filename)[1]
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     file.save(file_path)
 
@@ -109,17 +110,17 @@ def upload_file():
         huffman_compressed_bytes, codebook = huffman_compress_bytes(content_bytes)
         vae_compressed_data = vae_compress(huffman_compressed_bytes)
 
-        output_zip = os.path.join(COMPRESSED_FOLDER, f"{filename}_compressed.zip")
+        output_zip = os.path.join(COMPRESSED_FOLDER, f"{os.path.splitext(filename)[0]}_compressed.zip")
         with zipfile.ZipFile(output_zip, 'w') as zipf:
-            zipf.writestr(f"{filename}_compressed.bin", vae_compressed_data)
-            zipf.writestr(f"{filename}_codebook.json", json.dumps({str(k): v for k, v in codebook.items()}))
+            zipf.writestr(f"{os.path.splitext(filename)[0]}_compressed.bin", vae_compressed_data)
+            zipf.writestr(f"{os.path.splitext(filename)[0]}_codebook.json", json.dumps({str(k): v for k, v in codebook.items()}))
 
         original_size = os.path.getsize(file_path)
         compressed_size = os.path.getsize(output_zip)
         compression_ratio = round(original_size / compressed_size, 2) if compressed_size > 0 else 0
         space_saving = round((1 - compressed_size / original_size) * 100, 2) if original_size > 0 else 0
 
-        download_url = f"http://127.0.0.1:5000/download/{filename}_compressed.zip"
+        download_url = f"http://127.0.0.1:5000/download/{os.path.basename(output_zip)}"
 
         return jsonify({
             "message": "✅ File successfully compressed!",
@@ -167,9 +168,11 @@ def decompress_file():
         huffman_bytes = vae_decompress(vae_compressed_data)
         original_data = huffman_decompress(huffman_bytes, codebook)
 
+        # Preserving original file extension during decompression
+        file_extension = os.path.splitext(filename)[1]
         return send_file(
             io.BytesIO(original_data),
-            download_name=filename.replace("_compressed.zip", "_decompressed_original_file.bin"),
+            download_name=f"{os.path.splitext(filename)[0]}_decompressed{file_extension}",
             as_attachment=True
         )
 

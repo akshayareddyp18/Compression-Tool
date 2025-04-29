@@ -65,10 +65,10 @@ function App() {
       const decompressedUrl = window.URL.createObjectURL(decompressedBlob);
       const link = document.createElement("a");
       link.href = decompressedUrl;
-      link.setAttribute("download", compressedFileName.replace("_compressed.zip", "_decompressed.bin"));
+      link.setAttribute("download", compressedFileName.replace("_compressed.zip", "_decompressed" + compressedFileName.split('.').pop()));
       document.body.appendChild(link);
       link.click();
-      link.parentNode.removeChild(link);
+      link.remove(); // Simplified instead of removeChild
 
       setMessage("✅ File successfully decompressed!");
       alert("✅ Decompression successful!");
@@ -119,45 +119,30 @@ function App() {
               backgroundColor: "#4A90E2",
               borderRadius: "5px",
             }}
-          />
+          ></div>
         </div>
       )}
 
-      <p style={{ color: message.includes("Error") ? "red" : "green" }}>{message}</p>
+      {message && <p style={{ marginTop: "15px", fontSize: "18px" }}>{message}</p>}
 
       {downloadUrl && (
-        <>
-          <a href={downloadUrl} download>
-            <button
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "green",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                marginRight: "10px",
-              }}
-            >
-              Download Compressed File
-            </button>
-          </a>
-
+        <div>
           <button
             onClick={handleDecompress}
             disabled={decompressing}
             style={{
+              marginTop: "15px",
               padding: "10px 20px",
-              backgroundColor: "orange",
+              backgroundColor: "#32CD32",
               color: "white",
               border: "none",
               borderRadius: "8px",
               cursor: "pointer",
             }}
           >
-            {decompressing ? "Decompressing..." : "Decompress File"}
+            {decompressing ? "Decompressing..." : "Decompress"}
           </button>
-        </>
+        </div>
       )}
     </div>
   );
