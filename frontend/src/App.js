@@ -24,9 +24,28 @@ const App = () => {
 
   // Handle file change and validation
   const handleFileChange = (selectedFile) => {
+    if (!selectedFile) {
+      setMessage("❌ No file selected!");
+      return;
+    }
+
+    if (selectedFile.size === 0) {
+      setMessage("❌ The selected file is empty! Please upload a non-empty file.");
+      return;
+    }
+
     const allowedTypes = ["text/plain", "application/pdf", "image/png", "application/zip"];
-    if (selectedFile && !allowedTypes.includes(selectedFile.type)) {
-      setMessage("❌ Unsupported file type! Please upload a text, PDF, PNG, or ZIP file.");
+    const allowedExtensions = [".txt", ".pdf", ".png", ".zip", ".jpg", ".docx"];
+    const fileExtension = selectedFile.name.split('.').pop().toLowerCase();
+
+    if (
+      selectedFile &&
+      !allowedTypes.includes(selectedFile.type) &&
+      !allowedExtensions.includes(`.${fileExtension}`)
+    ) {
+      setMessage(
+        "❌ Unsupported file type! Please upload a text, PDF, PNG, or ZIP file."
+      );
       return;
     }
 
@@ -61,6 +80,19 @@ const App = () => {
     handleFileChange(droppedFile);
   };
 
+  // Reset the state to start fresh
+  const handleReset = () => {
+    setFile(null);
+    setMessage("");
+    setDownloadUrl("");
+    setCodebookFilename("");
+    setCompressionInfo(null);
+    setUploadProgress(0);
+    setLoading(false);
+    setDecompressing(false);
+    setIsDragging(false);
+  };
+
   // Handle file upload and compression
   const handleUpload = async () => {
     if (!file) {
@@ -70,6 +102,7 @@ const App = () => {
 
     const formData = new FormData();
     formData.append("file", file);
+    console.log("Uploading file:", file.name, file.type, `${(file.size / 1024).toFixed(2)} KB`);
 
     try {
       setLoading(true);
@@ -91,8 +124,8 @@ const App = () => {
         spaceSaved: response.data.space_saved_percent,
       });
     } catch (error) {
-      console.error("Compression error:", error);
-      const errorMessage = error.response?.data?.message || "❌ Error uploading or compressing the file.";
+      console.error("Compression error:", error.response?.data || error.message);
+      const errorMessage = error.response?.data?.message || "❌ Failed to compress the file. Please try again or use a different file.";
       setMessage(errorMessage);
     } finally {
       setLoading(false);
@@ -102,7 +135,9 @@ const App = () => {
   // Handle file decompression
   const handleDecompress = async () => {
     if (!downloadUrl || !codebookFilename) {
-      setMessage("❌ No compressed file or codebook available. Please upload and compress a file first.");
+      setMessage(
+        "❌ No compressed file or codebook available. Please upload and compress a file first."
+      );
       return;
     }
 
@@ -112,10 +147,18 @@ const App = () => {
       console.log("Compressed filename:", compressedFileName);
       console.log("Codebook filename:", codebookFilename);
 
-      const response = await axios.get(downloadUrl, { responseType: "blob" });
+      // Fetch the compressed file
+      const compressedResponse = await axios.get(downloadUrl, {
+        responseType: "blob",
+      });
+
+      // Verify the codebook file exists (we don't need its content, just confirm it's accessible)
+      const codebookUrl = `${backendUrl}/download/${codebookFilename}`;
+      console.log("Checking codebook availability at:", codebookUrl);
+      await axios.head(codebookUrl);
 
       const formData = new FormData();
-      formData.append("file", new File([response.data], compressedFileName));
+      formData.append("file", new File([compressedResponse.data], compressedFileName));
       formData.append("codebook_filename", codebookFilename);
 
       const decompressResponse = await axios.post(`${backendUrl}/decompress`, formData, {
@@ -136,10 +179,17 @@ const App = () => {
 
       setMessage("✅ File successfully decompressed!");
     } catch (error) {
-      console.error("Decompression error:", error);
-      const errorMessage = error.response?.data?.message || "❌ Error decompressing the file.";
-      if (error.response?.data?.message.includes("Codebook file not found")) {
-        setMessage("❌ Decompression failed: The codebook file is missing. Please re-upload and compress the file.");
+      console.error("Decompression error:", error.response?.data || error.message);
+      const errorMessage =
+        error.message || error.response?.data?.message || "❌ Error decompressing the file. Please try again.";
+      if (
+        error.message.includes("Network Error") ||
+        error.response?.status === 404 ||
+        error.response?.data?.message.includes("Codebook file not found")
+      ) {
+        setMessage(
+          "❌ Decompression failed: The codebook file is missing or inaccessible. Please re-upload and compress the file."
+        );
       } else {
         setMessage(errorMessage);
       }
@@ -203,15 +253,26 @@ const App = () => {
         </div>
       )}
 
-      <button
-        onClick={handleUpload}
-        disabled={loading}
-        className="action-button compress-button"
-        title="Compress the selected file"
-        aria-label="Upload and compress file"
-      >
-        {loading ? "Compressing..." : "Upload & Compress"}
-      </button>
+      <div className="action-buttons">
+        <button
+          onClick={handleUpload}
+          disabled={loading}
+          className="action-button compress-button"
+          title="Compress the selected file"
+          aria-label="Upload and compress file"
+        >
+          {loading ? "Compressing..." : "Upload & Compress"}
+        </button>
+
+        <button
+          onClick={handleReset}
+          className="action-button reset-button"
+          title="Reset the application state"
+          aria-label="Reset application state"
+        >
+          Reset
+        </button>
+      </div>
 
       {uploadProgress > 0 && (
         <div className="progress-bar" role="progressbar" aria-valuenow={uploadProgress} aria-valuemin="0" aria-valuemax="100">
@@ -393,6 +454,14 @@ const App = () => {
 
           .decompress-button:hover:not(:disabled) {
             background: linear-gradient(45deg, #D66E12, #E88C34);
+          }
+
+          .reset-button {
+            background: linear-gradient(45deg, #7F8C8D, #95A5A6);
+          }
+
+          .reset-button:hover:not(:disabled) {
+            background: linear-gradient(45deg, #6F7C7D, #859596);
           }
 
           .action-button:disabled {
