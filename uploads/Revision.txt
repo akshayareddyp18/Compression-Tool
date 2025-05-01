@@ -1,0 +1,7 @@
+Revision:
+1)unique7 duplicate in array 
+2)max sum of subarray
+3)reverse of string 
+   and words 
+4)subsequence 
+

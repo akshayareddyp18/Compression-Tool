@@ -11,18 +11,19 @@ const LoadingSpinner = () => (
 // Main App component
 const App = () => {
   const [file, setFile] = useState(null);
+  const [compressedFile, setCompressedFile] = useState(null);
   const [message, setMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState("");
-  const [codebookFilename, setCodebookFilename] = useState("");
   const [compressionInfo, setCompressionInfo] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [decompressing, setDecompressing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showDecompressSection, setShowDecompressSection] = useState(false);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:5000";
 
-  // Handle file change and validation
+  // Handle file change and validation for original file
   const handleFileChange = (selectedFile) => {
     if (!selectedFile) {
       setMessage("❌ No file selected!");
@@ -34,7 +35,7 @@ const App = () => {
       return;
     }
 
-    const allowedTypes = ["text/plain", "application/pdf", "image/png", "application/zip"];
+    const allowedTypes = ["text/plain", "application/pdf", "image/png", "application/zip", "image/jpeg", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
     const allowedExtensions = [".txt", ".pdf", ".png", ".zip", ".jpg", ".docx"];
     const fileExtension = selectedFile.name.split('.').pop().toLowerCase();
 
@@ -44,7 +45,7 @@ const App = () => {
       !allowedExtensions.includes(`.${fileExtension}`)
     ) {
       setMessage(
-        "❌ Unsupported file type! Please upload a text, PDF, PNG, or ZIP file."
+        "❌ Unsupported file type! Please upload a text, PDF, PNG, ZIP, JPG, or DOCX file."
       );
       return;
     }
@@ -52,9 +53,23 @@ const App = () => {
     setFile(selectedFile);
     setMessage("");
     setDownloadUrl("");
-    setCodebookFilename("");
     setCompressionInfo(null);
     setUploadProgress(0);
+    setShowDecompressSection(false);
+  };
+
+  // Handle compressed file change for decompression
+  const handleCompressedFileChange = (selectedFile) => {
+    if (!selectedFile) {
+      setMessage("❌ No compressed file selected!");
+      return;
+    }
+    if (!selectedFile.name.endsWith('.zip')) {
+      setMessage("❌ Please select a .zip file!");
+      return;
+    }
+    setCompressedFile(selectedFile);
+    setMessage("");
   };
 
   // Handle file input change
@@ -83,14 +98,15 @@ const App = () => {
   // Reset the state to start fresh
   const handleReset = () => {
     setFile(null);
+    setCompressedFile(null);
     setMessage("");
     setDownloadUrl("");
-    setCodebookFilename("");
     setCompressionInfo(null);
     setUploadProgress(0);
     setLoading(false);
     setDecompressing(false);
     setIsDragging(false);
+    setShowDecompressSection(false);
   };
 
   // Handle file upload and compression
@@ -114,15 +130,15 @@ const App = () => {
           setUploadProgress(percentCompleted);
         },
       });
-      setMessage("✅ Upload and compression successful!");
+      setMessage(response.data.message);
       setDownloadUrl(response.data.download_url);
-      setCodebookFilename(response.data.codebook_filename);
       setCompressionInfo({
         originalSize: (response.data.original_size_bytes / 1024).toFixed(2),
         compressedSize: (response.data.compressed_size_bytes / 1024).toFixed(2),
         compressionRatio: response.data.compression_ratio,
         spaceSaved: response.data.space_saved_percent,
       });
+      setShowDecompressSection(true);
     } catch (error) {
       console.error("Compression error:", error.response?.data || error.message);
       const errorMessage = error.response?.data?.message || "❌ Failed to compress the file. Please try again or use a different file.";
@@ -132,34 +148,34 @@ const App = () => {
     }
   };
 
+  // Handle compressed file download
+  const handleCompressedDownload = () => {
+    if (!downloadUrl) {
+      setMessage("❌ No compressed file available. Please upload and compress a file first.");
+      return;
+    }
+    setMessage("✅ Downloading ZIP file. Extract it using any ZIP tool (e.g., WinZip, WinRAR, or double-click) to access the original file.");
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.setAttribute("download", downloadUrl.split("/").pop());
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   // Handle file decompression
   const handleDecompress = async () => {
-    if (!downloadUrl || !codebookFilename) {
-      setMessage(
-        "❌ No compressed file or codebook available. Please upload and compress a file first."
-      );
+    if (!compressedFile) {
+      setMessage("❌ Please select a ZIP file for decompression.");
       return;
     }
 
     try {
       setDecompressing(true);
-      const compressedFileName = downloadUrl.split("/").pop();
-      console.log("Compressed filename:", compressedFileName);
-      console.log("Codebook filename:", codebookFilename);
-
-      // Fetch the compressed file
-      const compressedResponse = await axios.get(downloadUrl, {
-        responseType: "blob",
-      });
-
-      // Verify the codebook file exists (we don't need its content, just confirm it's accessible)
-      const codebookUrl = `${backendUrl}/download/${codebookFilename}`;
-      console.log("Checking codebook availability at:", codebookUrl);
-      await axios.head(codebookUrl);
+      console.log("Compressed filename:", compressedFile.name);
 
       const formData = new FormData();
-      formData.append("file", new File([compressedResponse.data], compressedFileName));
-      formData.append("codebook_filename", codebookFilename);
+      formData.append("file", compressedFile);
 
       const decompressResponse = await axios.post(`${backendUrl}/decompress`, formData, {
         responseType: "blob",
@@ -171,28 +187,18 @@ const App = () => {
       link.href = decompressedUrl;
       link.setAttribute(
         "download",
-        compressedFileName.replace("_compressed", "_decompressed")
+        compressedFile.name.replace("_compressed.zip", "")
       );
       document.body.appendChild(link);
       link.click();
       link.remove();
 
-      setMessage("✅ File successfully decompressed!");
+      setMessage("✅ File successfully decompressed! Open the downloaded file to view the original content.");
     } catch (error) {
       console.error("Decompression error:", error.response?.data || error.message);
       const errorMessage =
-        error.message || error.response?.data?.message || "❌ Error decompressing the file. Please try again.";
-      if (
-        error.message.includes("Network Error") ||
-        error.response?.status === 404 ||
-        error.response?.data?.message.includes("Codebook file not found")
-      ) {
-        setMessage(
-          "❌ Decompression failed: The codebook file is missing or inaccessible. Please re-upload and compress the file."
-        );
-      } else {
-        setMessage(errorMessage);
-      }
+        error.response?.data?.message || "❌ Error decompressing the file. Please try again.";
+      setMessage(errorMessage);
     } finally {
       setDecompressing(false);
     }
@@ -206,9 +212,12 @@ const App = () => {
       case "application/pdf":
         return "📄";
       case "image/png":
+      case "image/jpeg":
         return "🖼️";
       case "application/zip":
         return "📦";
+      case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        return "📜";
       default:
         return "📁";
     }
@@ -217,6 +226,12 @@ const App = () => {
   return (
     <div className="app-container">
       <h1>File Compression Tool</h1>
+      <div className="info-card">
+        <span className="message-icon">ℹ️</span>
+        <p>
+          <strong>How it Works:</strong> Upload a file to compress it into a ZIP archive. Download the ZIP file and extract it using any ZIP tool (e.g., WinZip, WinRAR, or double-click) to access the original file with its original extension. You can also decompress the ZIP file here to download the original file directly.
+        </p>
+      </div>
       <div
         className={`drop-zone ${isDragging ? "drag-active" : ""}`}
         onDragOver={handleDragOver}
@@ -230,7 +245,7 @@ const App = () => {
           onChange={handleInputChange}
           className="file-input"
           id="file-upload"
-          title="Upload a text, PDF, PNG, or ZIP file"
+          title="Upload a text, PDF, PNG, ZIP, JPG, or DOCX file"
           aria-label="Select a file to upload"
         />
         <label htmlFor="file-upload" className="drop-zone-label">
@@ -285,12 +300,6 @@ const App = () => {
         </div>
       )}
 
-      {decompressing && (
-        <div className="progress-bar indeterminate" role="progressbar" aria-busy="true">
-          <div className="progress-fill-indeterminate"></div>
-        </div>
-      )}
-
       {compressionInfo && (
         <div className="compression-info card">
           <p><strong>Original Size:</strong> {compressionInfo.originalSize} KB</p>
@@ -318,32 +327,61 @@ const App = () => {
 
       {downloadUrl && (
         <div className="action-buttons">
-          <a href={downloadUrl} download>
-            <button
-              className="action-button download-button"
-              title="Download the compressed file"
-              aria-label="Download compressed file"
-            >
-              Download Compressed File
-            </button>
-          </a>
+          <button
+            onClick={handleCompressedDownload}
+            className="action-button download-button"
+            title="Download the compressed ZIP file"
+            aria-label="Download compressed ZIP file"
+          >
+            Download Compressed ZIP
+          </button>
+        </div>
+      )}
 
+      {showDecompressSection && (
+        <div className="decompress-section card">
+          <h2>Decompress a ZIP File</h2>
+          <p>Upload a compressed ZIP file to extract the original file.</p>
+          <div className="drop-zone">
+            <input
+              type="file"
+              onChange={(e) => handleCompressedFileChange(e.target.files[0])}
+              className="file-input"
+              id="compressed-upload"
+              accept=".zip"
+              title="Upload a compressed .zip file"
+              aria-label="Select a compressed .zip file"
+            />
+            <label htmlFor="compressed-upload" className="drop-zone-label">
+              {compressedFile ? (
+                <span>Selected ZIP: {compressedFile.name}</span>
+              ) : (
+                <span>Select or drop a .zip file</span>
+              )}
+            </label>
+          </div>
           <button
             onClick={handleDecompress}
-            disabled={decompressing || !downloadUrl || !codebookFilename}
+            disabled={decompressing || !compressedFile}
             className="action-button decompress-button"
-            title="Decompress the downloaded file"
-            aria-label="Decompress file"
+            title="Decompress the selected ZIP file"
+            aria-label="Decompress ZIP file"
           >
             {decompressing ? "Decompressing..." : "Decompress File"}
           </button>
+          {decompressing && (
+            <div className="progress-bar indeterminate" role="progressbar" aria-busy="true">
+              <div className="progress-fill-indeterminate"></div>
+            </div>
+          )}
         </div>
       )}
 
       <style>
         {`
           .app-container {
-            background-color: #E6F0FA;
+            background-color: #FFFFFF;
+            border: 2px solid #4A90E2;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             padding: 40px;
@@ -357,12 +395,50 @@ const App = () => {
           h1 {
             color: #2C3E50;
             font-size: 28px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             font-weight: 600;
           }
 
+          h2 {
+            color: #2C3E50;
+            font-size: 20px;
+            margin-bottom: 15px;
+            font-weight: 500;
+          }
+
+          .info-card {
+            background-color: #E6F0FA;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: left;
+            font-size: 14px;
+            line-height: 1.6;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.3s ease-in;
+          }
+
+          .info-card p {
+            margin: 0;
+            color: #2C3E50;
+          }
+
+          .decompress-section {
+            margin-top: 30px;
+            text-align: center;
+            padding: 20px;
+          }
+
+          .decompress-section p {
+            color: #2C3E50;
+            font-size: 14px;
+            margin-bottom: 15px;
+          }
+
           .drop-zone {
-            background-color: #FFFFFF;
+            background-color: #E6F0FA;
             border: 2px dashed #D1DCE5;
             border-radius: 10px;
             padding: 20px;
@@ -372,7 +448,7 @@ const App = () => {
 
           .drop-zone.drag-active {
             border-color: #4A90E2;
-            background-color: #F1F5F9;
+            background-color: #D1E3F6;
           }
 
           .file-input {
@@ -392,7 +468,7 @@ const App = () => {
           }
 
           .card {
-            background-color: #FFFFFF;
+            background-color: #E6F0FA;
             border-radius: 10px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
             padding: 20px;
@@ -539,7 +615,7 @@ const App = () => {
           .dismiss-button {
             background: none;
             border: none;
-            color: #7F8C8D;
+            color: #F1F5F9;
             font-size: 16px;
             cursor: pointer;
             position: absolute;
@@ -589,7 +665,6 @@ const App = () => {
             margin-top: 20px;
           }
 
-          /* Responsive Design */
           @media (max-width: 600px) {
             .app-container {
               padding: 20px;
@@ -600,6 +675,10 @@ const App = () => {
               font-size: 24px;
             }
 
+            h2 {
+              font-size: 18px;
+            }
+
             .drop-zone {
               padding: 15px;
             }
@@ -607,6 +686,10 @@ const App = () => {
             .card {
               padding: 15px;
               font-size: 14px;
+            }
+
+            .info-card {
+              font-size: 12px;
             }
 
             .action-button {

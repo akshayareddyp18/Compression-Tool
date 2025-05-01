@@ -1,37 +1,37 @@
 /* Global styles for the application */
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-  
-  body {
-    background-color: #E6F0FA;
-    font-family: 'Inter', system-ui, Arial, sans-serif;
-    color: #2C3E50;
-    line-height: 1.6;
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  
-  #root {
-    width: 100%;
-  }
-  
-  /* Improve accessibility */
-  :focus {
-    outline: 2px solid #4A90E2;
-    outline-offset: 2px;
-  }
-  
-  /* Ensure sufficient contrast */
-  button, input, label {
-    color: inherit;
-  }
-  
-  /* Smooth scrolling */
-  html {
-    scroll-behavior: smooth;
-  }
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #FFFFFF; /* White background */
+  font-family: 'Inter', system-ui, Arial, sans-serif;
+  color: #2C3E50;
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#root {
+  width: 100%;
+}
+
+/* Improve accessibility */
+:focus {
+  outline: 2px solid #4A90E2;
+  outline-offset: 2px;
+}
+
+/* Ensure sufficient contrast */
+button, input, label {
+  color: inherit;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
