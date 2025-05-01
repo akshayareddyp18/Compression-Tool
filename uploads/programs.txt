@@ -1,0 +1,32 @@
+programs:
+
+LL
+DLL
+STACK
+QUEUE
+
+
+
+ARRAYS:
+[matrices]
+Anagram
+90 Rotate matrix
+Set Matrix zero
+
+
+
+Subarray
+Kadanes
+Duplicate element in array
+
+
+
+Sorting
+Searching
+
+
+
+TO DO LIST:
+
+
+1.Sort by Set Bit Count
