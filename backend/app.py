@@ -7,7 +7,11 @@ import zipfile
 from io import BytesIO
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=[
+    'http://localhost:3000',  
+    'https://Compression-Tool-1.onrender.com'  
+])
+
 
 # --------------------------------------------------
 # Logging
