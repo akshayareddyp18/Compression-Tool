@@ -21,7 +21,7 @@ const App = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [showDecompressSection, setShowDecompressSection] = useState(false);
 
-  const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:5000";
+  const backendUrl = process.env.REACT_APP_API_URL || "http://127.0.0.1:5000";
 
   // Handle file change and validation for original file
   const handleFileChange = (selectedFile) => {
